@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Ultra Realistic Cricket VR</title>
+<style>
+body{margin:0;overflow:hidden;background:black}
+#ui{position:absolute;top:10px;left:10px;color:white;font-family:Arial;z-index:10}
+button{padding:10px;margin:5px;font-size:16px}
+</style>
+</head>
+<body>
+
+<div id="ui">
+<div>?? Ultra Real Cricket | Mobile = Bat | TV Ready</div>
+<button onclick="enableMotion()">Enable Motion</button>
+<button onclick="setFormat('t20')">T20</button>
+<button onclick="setFormat('odi')">ODI</button>
+<button onclick="setFormat('test')">TEST</button>
+<button onclick="startGame()">Start</button>
+<div id="score">Score: 0</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/loaders/GLTFLoader.js"></script>
+
+<script>
+let scene,camera,renderer,ball,bat;
+let speed=1.2,gameStarted=false,score=0,format='t20';
+let swingPower=0;
+
+// SOUND
+const hitSound=new Audio('https://cdn.pixabay.com/download/audio/2022/03/15/audio_115b9b0c3e.mp3');
+const crowd=new Audio('https://cdn.pixabay.com/download/audio/2021/08/04/audio_crowd.mp3');
+const commentary=new Audio('https://cdn.pixabay.com/download/audio/2022/10/25/audio_commentary.mp3');
+
+init();animate();
+
+function init(){
+scene=new THREE.Scene();
+scene.background=new THREE.Color(0x87CEEB);
+
+camera=new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,0.1,1000);
+camera.position.set(0,1.6,4);
+
+renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth,window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// LIGHTING (REALISTIC)
+const light=new THREE.DirectionalLight(0xffffff,1);
+light.position.set(5,10,7);
+scene.add(light);
+
+const ambient=new THREE.AmbientLight(0xffffff,0.4);
+scene.add(ambient);
+
+// GROUND
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshStandardMaterial({color:0x2e8b57}));
+ground.rotation.x=-Math.PI/2;
+scene.add(ground);
+
+// PITCH
+const pitch=new THREE.Mesh(new THREE.PlaneGeometry(3,22),new THREE.MeshStandardMaterial({color:0xd2b48c}));
+pitch.rotation.x=-Math.PI/2;
+scene.add(pitch);
+
+// LOAD MODELS
+const loader=new THREE.GLTFLoader();
+
+loader.load('bat.glb',g=>{
+bat=g.scene;
+bat.scale.set(2,2,2);
+bat.position.set(0,1.2,3);
+scene.add(bat);
+});
+
+loader.load('ball.glb',g=>{
+ball=g.scene;
+ball.scale.set(0.4,0.4,0.4);
+scene.add(ball);
+resetBall();
+});
+
+// MOTION CONTROL
+window.addEventListener('devicemotion',e=>{
+let a=e.accelerationIncludingGravity;
+if(a){
+swingPower=Math.abs(a.x);
+if(swingPower>12) hitBall();
+}
+});
+
+window.addEventListener('touchstart',hitBall);
+window.addEventListener('resize',resize);
+}
+
+function enableMotion(){
+if(typeof DeviceMotionEvent.requestPermission==='function'){
+DeviceMotionEvent.requestPermission().then(p=>{
+if(p==='granted') alert('Motion enabled');
+});
+}else alert('Motion ready');
+}
+
+function setFormat(f){
+format=f;
+if(f==='t20') speed=1.4;
+if(f==='odi') speed=1.0;
+if(f==='test') speed=0.7;
+}
+
+function startGame(){
+gameStarted=true;score=0;updateScore();
+}
+
+function resetBall(){
+if(ball) ball.position.set(0,1,-35);
+}
+
+function hitBall(){
+if(!gameStarted || !ball) return;
+
+if(Math.abs(ball.position.z-camera.position.z)<1.5){
+
+let power=Math.min(swingPower/10,2);
+
+ball.userData.hit=true;
+ball.userData.velocityZ=-2*power;
+ball.userData.velocityY=0.5*power;
+
+score+=Math.floor(power*6);
+updateScore();
+
+hitSound.play();
+crowd.play();
+commentary.play();
+
+}
+}
+
+function updateScore(){
+document.getElementById('score').innerText='Score: '+score;
+}
+
+function animate(){
+requestAnimationFrame(animate);
+
+if(gameStarted && ball){
+
+// BOWLING
+if(!ball.userData.hit){
+ball.position.z+=speed;
+
+// SWING
+ball.position.x+=Math.sin(Date.now()*0.01)*0.15;
+ball.rotation.y+=0.3;
+}
+
+// AFTER HIT PHYSICS
+if(ball.userData.hit){
+ball.position.z+=ball.userData.velocityZ;
+ball.position.y+=ball.userData.velocityY;
+ball.userData.velocityY-=0.02; // gravity
+}
+
+// RESET
+if(ball.position.z>10 || ball.position.y<0 || ball.position.z<-50){
+ball.userData.hit=false;
+setFormat(format);
+resetBall();
+}
+}
+
+renderer.render(scene,camera);
+}
+
+function resize(){
+camera.aspect=window.innerWidth/window.innerHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(window.innerWidth,window.innerHeight);
+}
+</script>
+</body>
+</html>
